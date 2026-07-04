@@ -1,0 +1,107 @@
+# BlockForge
+
+An original open-source voxel sandbox game written from scratch in Java 17 with
+LWJGL 3 (OpenGL 3.3). It is inspired by the classic block-building genre but
+contains **no copied code, art, sounds, or names** — every texture in the game
+is generated procedurally at runtime from math, so the project ships zero
+image assets.
+
+## Features
+
+- **190+ block types** — stones, soils, sands, 4 wood species (logs, planks,
+  leaves, saplings), 14 ores in surface *and* deep variants, 14 refined mineral
+  blocks, 20 masonry blocks, 16-color cloth / glass / plaster / ceramic
+  families, 9 glowing lamps, flowers, mushrooms, crops, and utility blocks.
+- **Infinite procedurally generated terrain** — fractal-noise heightmaps with
+  five biomes (plains, forest, desert, tundra, mountains), beaches, frozen
+  lakes, and snow-capped peaks.
+- **Caves and ore veins** — 3D-noise cave systems with lava pools at depth and
+  depth-tiered ore distribution (coal near the surface, diamond in the deeps).
+- **Trees and vegetation** — oak, birch, pine, and walnut trees, cacti, tall
+  grass, ferns, six flower species, and mushrooms.
+- **First-person physics** — gravity, jumping, swimming, sprinting, axis-swept
+  AABB collision, and a fly mode.
+- **Block interaction** — raycast targeting with a selection outline, breaking,
+  placing, and middle-click block picking.
+- **Day/night cycle** with sky tint, dynamic lighting, and distance fog.
+- **Fully procedural texture atlas** — 16x16 tiles painted at startup by the
+  `Tiles` painter (wood grain, brick courses, ore blobs, cloth weave, ...).
+- **Chunked renderer** — 16x128x16 chunks, hidden-face culling, separate
+  opaque/cut-out and translucent passes, per-frame streaming budgets so the
+  world loads without stutter.
+
+## Requirements
+
+- Java 17 or newer
+- Maven 3.8+
+- A GPU/driver with OpenGL 3.3 support
+
+## Build & run
+
+```bash
+mvn package
+java -jar target/blockforge-1.0.0.jar          # optional: append a world seed
+```
+
+On **macOS** the JVM must start GLFW on the first thread:
+
+```bash
+java -XstartOnFirstThread -jar target/blockforge-1.0.0.jar
+```
+
+Or run directly through Maven:
+
+```bash
+mvn compile exec:java
+```
+
+## Controls
+
+| Input | Action |
+| --- | --- |
+| Mouse | Look around |
+| `W A S D` | Move |
+| `Space` | Jump / fly up / swim |
+| `Left Shift` | Fly down |
+| `Left Ctrl` | Sprint |
+| `F` | Toggle fly mode |
+| Left click | Break block |
+| Right click | Place block |
+| Middle click | Pick targeted block |
+| `1`–`9` / scroll | Select hotbar slot |
+| `Z` / `X` (or PgUp / PgDn) | Page the hotbar through all 190+ blocks |
+| `Esc` | Release / capture the mouse |
+
+The window title shows FPS, position, the held block, and the registered block
+count.
+
+## Project layout
+
+```
+src/main/java/com/blockforge/
+├── Main.java                 window + main loop
+├── Game.java                 simulation, streaming, interaction, hotbar
+├── Input.java                GLFW input state
+├── player/Player.java        AABB physics & camera
+├── world/
+│   ├── Block.java            block type definition
+│   ├── Blocks.java           registry of all 190+ blocks
+│   ├── Chunk.java            16x128x16 block storage
+│   ├── World.java            chunk streaming & block access
+│   ├── TerrainGenerator.java biomes, caves, ores, trees
+│   ├── Noise.java            gradient noise (2D/3D, fractal, ridged)
+│   └── Raycast.java          voxel grid traversal
+└── render/
+    ├── Renderer.java         world passes, fog, day/night, selection box
+    ├── ChunkMesher.java      chunk → vertex data
+    ├── Mesh.java             VAO/VBO wrapper
+    ├── Shader.java           GLSL program wrapper
+    ├── TextureAtlas.java     runtime-built atlas
+    ├── Tiles.java            procedural tile painters (all in-game art)
+    └── Hud.java              crosshair + hotbar overlay
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE). This is an original work; it is not affiliated
+with, endorsed by, or derived from Mojang/Microsoft products.
