@@ -50,6 +50,10 @@ public final class Shader {
         glUniformMatrix4fv(loc(name), false, matBuf);
     }
 
+    public void setVec2(String name, float x, float y) {
+        glUniform2f(loc(name), x, y);
+    }
+
     public void setVec3(String name, float x, float y, float z) {
         glUniform3f(loc(name), x, y, z);
     }

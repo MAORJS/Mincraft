@@ -22,6 +22,10 @@ public final class SoundEngine {
     public static final int CLICK = 0;
     public static final int BREAK = 1;
     public static final int PLACE = 2;
+    public static final int HURT = 3;
+    public static final int POP = 4;
+    public static final int EAT = 5;
+    public static final int SHOOT = 6;
 
     private static final int SAMPLE_RATE = 22050;
     private static final int SOURCE_POOL = 8;
@@ -30,7 +34,7 @@ public final class SoundEngine {
     private boolean enabled;
     private long device;
     private long context;
-    private final int[] buffers = new int[3];
+    private final int[] buffers = new int[7];
     private final int[] sources = new int[SOURCE_POOL];
     private int nextSource = 0;
 
@@ -53,6 +57,10 @@ public final class SoundEngine {
             buffers[CLICK] = makeBuffer(synthClick());
             buffers[BREAK] = makeBuffer(synthBreak());
             buffers[PLACE] = makeBuffer(synthPlace());
+            buffers[HURT] = makeBuffer(synthHurt());
+            buffers[POP] = makeBuffer(synthPop());
+            buffers[EAT] = makeBuffer(synthEat());
+            buffers[SHOOT] = makeBuffer(synthShoot());
             for (int i = 0; i < SOURCE_POOL; i++) {
                 sources[i] = alGenSources();
             }
@@ -104,6 +112,66 @@ public final class SoundEngine {
             double freq = 170 - t * 300; // slight downward pitch sweep
             double s = Math.sin(2 * Math.PI * freq * t);
             pcm[i] = (short) (s * env * 14000);
+        }
+        return pcm;
+    }
+
+    /** Descending saw grunt for taking damage. */
+    private static short[] synthHurt() {
+        int n = SAMPLE_RATE * 160 / 1000;
+        short[] pcm = new short[n];
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) SAMPLE_RATE;
+            double env = Math.exp(-t * 18);
+            double freq = 240 - t * 500;
+            double phase = (t * freq) % 1.0;
+            double saw = phase * 2 - 1;
+            pcm[i] = (short) (saw * env * 13000);
+        }
+        return pcm;
+    }
+
+    /** Quick upward pop for item pickup. */
+    private static short[] synthPop() {
+        int n = SAMPLE_RATE * 60 / 1000;
+        short[] pcm = new short[n];
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) SAMPLE_RATE;
+            double env = Math.exp(-t * 60);
+            double freq = 400 + t * 3200;
+            pcm[i] = (short) (Math.sin(2 * Math.PI * freq * t) * env * 9000);
+        }
+        return pcm;
+    }
+
+    /** Chewing crunches for eating. */
+    private static short[] synthEat() {
+        int n = SAMPLE_RATE * 320 / 1000;
+        short[] pcm = new short[n];
+        Random r = new Random(7);
+        for (int chew = 0; chew < 3; chew++) {
+            int start = chew * SAMPLE_RATE * 100 / 1000;
+            double last = 0;
+            for (int i = 0; i < SAMPLE_RATE * 60 / 1000 && start + i < n; i++) {
+                double t = i / (double) SAMPLE_RATE;
+                double env = Math.exp(-t * 55);
+                last = last * 0.4 + (r.nextDouble() * 2 - 1) * 0.6;
+                pcm[start + i] = (short) (last * env * 8000);
+            }
+        }
+        return pcm;
+    }
+
+    /** Twang for bow shots. */
+    private static short[] synthShoot() {
+        int n = SAMPLE_RATE * 120 / 1000;
+        short[] pcm = new short[n];
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) SAMPLE_RATE;
+            double env = Math.exp(-t * 30);
+            double freq = 600 + Math.sin(t * 90) * 60;
+            pcm[i] = (short) ((Math.sin(2 * Math.PI * freq * t) * 0.7
+                    + Math.signum(Math.sin(2 * Math.PI * freq * 0.5 * t)) * 0.3) * env * 10000);
         }
         return pcm;
     }

@@ -22,14 +22,18 @@ public final class Renderer {
             layout(location = 2) in float aShade;
             uniform mat4 uProj;
             uniform mat4 uView;
+            uniform mat4 uModel;
             uniform vec3 uOffset;
+            uniform vec2 uUVOffset;
+            uniform vec2 uUVScale;
             out vec2 vUV;
             out float vShade;
             out float vDist;
             void main() {
-                vec4 viewPos = uView * vec4(aPos + uOffset, 1.0);
+                vec3 world = (uModel * vec4(aPos, 1.0)).xyz + uOffset;
+                vec4 viewPos = uView * vec4(world, 1.0);
                 gl_Position = uProj * viewPos;
-                vUV = aUV;
+                vUV = uUVOffset + aUV * uUVScale;
                 vShade = aShade;
                 vDist = length(viewPos.xyz);
             }
@@ -131,8 +135,11 @@ public final class Renderer {
         }
     }
 
+    private final Matrix4f identity = new Matrix4f();
+
     public void render(World world, Player player, float aspect, float dayLight,
-                       Vector3f skyColor, Raycast.Hit selection) {
+                       Vector3f skyColor, Raycast.Hit selection,
+                       java.util.List<com.blockforge.entity.Entity> entities, double time) {
         glClearColor(skyColor.x, skyColor.y, skyColor.z, 1f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -148,6 +155,9 @@ public final class Renderer {
         worldShader.use();
         worldShader.setMat4("uProj", proj);
         worldShader.setMat4("uView", view);
+        worldShader.setMat4("uModel", identity);
+        worldShader.setVec2("uUVOffset", 0f, 0f);
+        worldShader.setVec2("uUVScale", 1f, 1f);
         worldShader.setInt("uTex", 0);
         worldShader.setVec3("uFogColor", skyColor.x, skyColor.y, skyColor.z);
         worldShader.setFloat("uFogStart", fogStart);
@@ -167,6 +177,14 @@ public final class Renderer {
             if (tooFar(c, pcx, pcz) || c.opaqueMesh == null) continue;
             worldShader.setVec3("uOffset", c.cx * Chunk.SX, 0, c.cz * Chunk.SZ);
             c.opaqueMesh.draw();
+        }
+
+        // entities (opaque cut-out, between world passes)
+        if (entities != null && !entities.isEmpty()) {
+            EntityRenderer.render(worldShader, entities, time);
+            worldShader.setMat4("uModel", identity);
+            worldShader.setVec2("uUVOffset", 0f, 0f);
+            worldShader.setVec2("uUVScale", 1f, 1f);
         }
 
         // translucent pass (water, glass, ice)

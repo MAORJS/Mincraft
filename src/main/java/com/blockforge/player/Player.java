@@ -34,10 +34,119 @@ public final class Player {
     public boolean onGround;
     public boolean flying;
 
+    // survival stats
+    public static final int MAX_HEALTH = 20;
+    public static final int MAX_HUNGER = 20;
+    public static final int MAX_AIR = 10;
+    public float health = MAX_HEALTH;
+    public float hunger = MAX_HUNGER;
+    public float air = MAX_AIR;
+    public boolean isDead;
+    public float invulnTime;
+    private float fallStart = Float.NaN;
+    private float knockX, knockZ;
+    private float regenTimer;
+    /** Set when damage kills or hurts the player this tick (for sound/flash). */
+    public boolean damagedThisTick;
+
     private final World world;
 
     public Player(World world) {
         this.world = world;
+    }
+
+    /** Applies damage with knockback; ignored during invulnerability frames. */
+    public void damage(float amount, float kx, float kz) {
+        if (isDead || invulnTime > 0) return;
+        health -= amount;
+        invulnTime = 0.5f;
+        knockX += kx;
+        knockZ += kz;
+        velocity.y = Math.max(velocity.y, 5f);
+        damagedThisTick = true;
+        if (health <= 0) {
+            health = 0;
+            isDead = true;
+        }
+    }
+
+    public void respawn(int x, int z) {
+        health = MAX_HEALTH;
+        hunger = MAX_HUNGER;
+        air = MAX_AIR;
+        isDead = false;
+        invulnTime = 2f;
+        fallStart = Float.NaN;
+        knockX = knockZ = 0;
+        spawnAt(x, z);
+    }
+
+    /** Per-tick survival bookkeeping: fall damage, drowning, lava, regen. */
+    public void survivalTick(float dt, boolean sprinting) {
+        invulnTime = Math.max(0, invulnTime - dt);
+        if (isDead) return;
+
+        // fall damage
+        if (!flying && !inWater()) {
+            if (!onGround && Float.isNaN(fallStart)) {
+                fallStart = position.y;
+            } else if (!onGround) {
+                fallStart = Math.max(fallStart, position.y);
+            } else if (!Float.isNaN(fallStart)) {
+                float fell = fallStart - position.y;
+                if (fell > 3.5f) {
+                    damage((float) Math.floor(fell - 3f), 0, 0);
+                }
+                fallStart = Float.NaN;
+            }
+        } else {
+            fallStart = Float.NaN;
+        }
+
+        // drowning: eyes underwater
+        int ex = (int) Math.floor(position.x);
+        int ey = (int) Math.floor(position.y + EYE_HEIGHT);
+        int ez = (int) Math.floor(position.z);
+        boolean eyesInWater = world.getBlock(ex, ey, ez) == Blocks.WATER;
+        if (eyesInWater) {
+            air -= dt;
+            if (air <= 0) {
+                air = 0;
+                damage(1f * dt * 2.5f > 1 ? 2 : 1, 0, 0);
+                invulnTime = Math.min(invulnTime, 0.35f);
+            }
+        } else {
+            air = Math.min(MAX_AIR, air + dt * 4);
+        }
+
+        // lava contact
+        int fx = (int) Math.floor(position.x);
+        int fy = (int) Math.floor(position.y + 0.2f);
+        int fz = (int) Math.floor(position.z);
+        if (world.getBlock(fx, fy, fz) == Blocks.LAVA) {
+            damage(4f, 0, 0);
+            invulnTime = Math.min(invulnTime, 0.4f);
+        }
+
+        // hunger drain and health regen
+        hunger = Math.max(0, hunger - dt * (sprinting ? 0.10f : 0.012f));
+        if (hunger >= 18 && health < MAX_HEALTH) {
+            regenTimer += dt;
+            if (regenTimer >= 3f) {
+                regenTimer = 0;
+                health = Math.min(MAX_HEALTH, health + 1);
+                hunger = Math.max(0, hunger - 0.4f);
+            }
+        } else if (hunger <= 0) {
+            regenTimer += dt;
+            if (regenTimer >= 4f && health > 2) { // starvation stops at 1 heart
+                regenTimer = 0;
+                damage(1, 0, 0);
+                invulnTime = Math.min(invulnTime, 0.3f);
+            }
+        } else {
+            regenTimer = 0;
+        }
     }
 
     public void turn(float dyaw, float dpitch) {
@@ -84,8 +193,10 @@ public final class Player {
         }
 
         float speed = flying ? FLY_SPEED : (water ? SWIM_SPEED : (sprint ? SPRINT_SPEED : WALK_SPEED));
-        velocity.x = ax * speed;
-        velocity.z = az * speed;
+        velocity.x = ax * speed + knockX;
+        velocity.z = az * speed + knockZ;
+        knockX *= Math.max(0, 1 - 6f * dt);
+        knockZ *= Math.max(0, 1 - 6f * dt);
 
         if (flying) {
             velocity.y = (jump ? FLY_SPEED : 0) - (sneak ? FLY_SPEED : 0);

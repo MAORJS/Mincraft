@@ -101,7 +101,7 @@ public final class WorldStorage {
         return worlds;
     }
 
-    public static WorldInfo createWorld(String name, long seed) {
+    public static WorldInfo createWorld(String name, long seed, String gamemode) {
         String base = name.strip().replaceAll("[^A-Za-z0-9-_ ]", "").replace(' ', '_');
         if (base.isEmpty()) base = "world";
         Path dir = worldsDir().resolve(base);
@@ -112,6 +112,7 @@ public final class WorldStorage {
         Properties p = new Properties();
         p.setProperty("name", name.strip().isEmpty() ? "New World" : name.strip());
         p.setProperty("seed", String.valueOf(seed));
+        p.setProperty("gamemode", gamemode);
         p.setProperty("created", String.valueOf(System.currentTimeMillis()));
         p.setProperty("lastPlayed", String.valueOf(System.currentTimeMillis()));
         WorldInfo info = new WorldInfo(dir, p);
@@ -167,6 +168,201 @@ public final class WorldStorage {
             System.err.println("could not load chunk " + chunk.cx + "," + chunk.cz + ": " + e.getMessage());
             return false;
         }
+    }
+
+    // ------------------------------------------- entities / block entities
+
+    private Path extrasFile(String name) {
+        return chunkDir.getParent().resolve(name);
+    }
+
+    /** Saves entities, block-entity data, and the player inventory. */
+    public void saveExtras(com.blockforge.world.World world,
+                           com.blockforge.item.Inventory inventory,
+                           Properties props) {
+        // inventory into properties
+        StringBuilder inv = new StringBuilder();
+        for (int i = 0; i < com.blockforge.item.Inventory.SIZE; i++) {
+            var s = inventory.slots[i];
+            if (i > 0) inv.append(';');
+            if (s != null) inv.append(s.item.id).append(':').append(s.count).append(':').append(s.damage);
+        }
+        props.setProperty("inventory", inv.toString());
+
+        try {
+            Files.createDirectories(chunkDir.getParent());
+            try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(
+                    Files.newOutputStream(extrasFile("entities.gz"))))) {
+                java.util.List<com.blockforge.entity.Entity> toSave = new ArrayList<>();
+                for (var e : world.entities) {
+                    if (e instanceof com.blockforge.entity.Mob || e instanceof com.blockforge.entity.ItemEntity) {
+                        toSave.add(e);
+                    }
+                }
+                out.writeInt(toSave.size());
+                for (var e : toSave) {
+                    if (e instanceof com.blockforge.entity.Mob mob) {
+                        out.writeByte(0);
+                        out.writeByte(mob.type.ordinal());
+                        out.writeFloat(mob.position.x);
+                        out.writeFloat(mob.position.y);
+                        out.writeFloat(mob.position.z);
+                        out.writeFloat(mob.health);
+                    } else {
+                        var item = (com.blockforge.entity.ItemEntity) e;
+                        out.writeByte(1);
+                        out.writeInt(item.stack.item.id);
+                        out.writeInt(item.stack.count);
+                        out.writeInt(item.stack.damage);
+                        out.writeFloat(item.position.x);
+                        out.writeFloat(item.position.y);
+                        out.writeFloat(item.position.z);
+                    }
+                }
+            }
+            try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(
+                    Files.newOutputStream(extrasFile("blockentities.gz"))))) {
+                var store = world.blockEntities;
+                out.writeInt(store.furnaces.size());
+                for (var e : store.furnaces.entrySet()) {
+                    out.writeLong(e.getKey());
+                    writeStack(out, e.getValue().input);
+                    writeStack(out, e.getValue().fuel);
+                    writeStack(out, e.getValue().output);
+                    out.writeFloat(e.getValue().progress);
+                    out.writeFloat(e.getValue().burnLeft);
+                    out.writeFloat(e.getValue().burnTotal);
+                }
+                out.writeInt(store.chests.size());
+                for (var e : store.chests.entrySet()) {
+                    out.writeLong(e.getKey());
+                    for (int i = 0; i < 27; i++) writeStack(out, e.getValue().slots[i]);
+                }
+                out.writeInt(store.spawners.size());
+                for (var e : store.spawners.entrySet()) {
+                    out.writeLong(e.getKey());
+                    out.writeByte(e.getValue().mobType.ordinal());
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("could not save entities: " + e.getMessage());
+        }
+    }
+
+    /** Loads entities, block-entity data, and the player inventory. */
+    public void loadExtras(com.blockforge.world.World world,
+                           com.blockforge.item.Inventory inventory,
+                           Properties props) {
+        String inv = props.getProperty("inventory");
+        if (inv != null) {
+            String[] parts = inv.split(";", -1);
+            for (int i = 0; i < Math.min(parts.length, com.blockforge.item.Inventory.SIZE); i++) {
+                if (parts[i].isEmpty()) continue;
+                String[] f = parts[i].split(":");
+                try {
+                    int id = Integer.parseInt(f[0]);
+                    if (id >= 0 && id < com.blockforge.item.Items.count()) {
+                        inventory.slots[i] = new com.blockforge.item.ItemStack(
+                                com.blockforge.item.Items.get(id),
+                                Integer.parseInt(f[1]), Integer.parseInt(f[2]));
+                    }
+                } catch (RuntimeException ignored) {
+                }
+            }
+        }
+
+        Path ents = extrasFile("entities.gz");
+        if (Files.isRegularFile(ents)) {
+            try (DataInputStream in = new DataInputStream(new GZIPInputStream(
+                    Files.newInputStream(ents)))) {
+                int n = in.readInt();
+                var types = com.blockforge.entity.MobType.values();
+                for (int i = 0; i < n; i++) {
+                    int kind = in.readByte();
+                    if (kind == 0) {
+                        int t = in.readByte();
+                        float x = in.readFloat(), y = in.readFloat(), z = in.readFloat();
+                        float hp = in.readFloat();
+                        if (t >= 0 && t < types.length) {
+                            var mob = new com.blockforge.entity.Mob(world, types[t], x, y, z);
+                            mob.health = hp;
+                            world.entities.add(mob);
+                        }
+                    } else {
+                        int id = in.readInt();
+                        int count = in.readInt();
+                        int dmg = in.readInt();
+                        float x = in.readFloat(), y = in.readFloat(), z = in.readFloat();
+                        if (id >= 0 && id < com.blockforge.item.Items.count()) {
+                            world.entities.add(new com.blockforge.entity.ItemEntity(world,
+                                    new com.blockforge.item.ItemStack(
+                                            com.blockforge.item.Items.get(id), count, dmg),
+                                    x, y, z, 0, 0, 0));
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("could not load entities: " + e.getMessage());
+            }
+        }
+
+        Path bes = extrasFile("blockentities.gz");
+        if (Files.isRegularFile(bes)) {
+            try (DataInputStream in = new DataInputStream(new GZIPInputStream(
+                    Files.newInputStream(bes)))) {
+                var store = world.blockEntities;
+                int nf = in.readInt();
+                for (int i = 0; i < nf; i++) {
+                    long key = in.readLong();
+                    var f = new com.blockforge.world.BlockEntityStore.Furnace();
+                    f.input = readStack(in);
+                    f.fuel = readStack(in);
+                    f.output = readStack(in);
+                    f.progress = in.readFloat();
+                    f.burnLeft = in.readFloat();
+                    f.burnTotal = in.readFloat();
+                    store.furnaces.put(key, f);
+                }
+                int nc = in.readInt();
+                for (int i = 0; i < nc; i++) {
+                    long key = in.readLong();
+                    var c = new com.blockforge.world.BlockEntityStore.Chest();
+                    for (int j = 0; j < 27; j++) c.slots[j] = readStack(in);
+                    store.chests.put(key, c);
+                }
+                int ns = in.readInt();
+                var types = com.blockforge.entity.MobType.values();
+                for (int i = 0; i < ns; i++) {
+                    long key = in.readLong();
+                    int t = in.readByte();
+                    var sp = new com.blockforge.world.BlockEntityStore.Spawner();
+                    if (t >= 0 && t < types.length) sp.mobType = types[t];
+                    store.spawners.put(key, sp);
+                }
+            } catch (IOException e) {
+                System.err.println("could not load block entities: " + e.getMessage());
+            }
+        }
+    }
+
+    private static void writeStack(DataOutputStream out, com.blockforge.item.ItemStack s)
+            throws IOException {
+        if (s == null) {
+            out.writeInt(-1);
+        } else {
+            out.writeInt(s.item.id);
+            out.writeInt(s.count);
+            out.writeInt(s.damage);
+        }
+    }
+
+    private static com.blockforge.item.ItemStack readStack(DataInputStream in) throws IOException {
+        int id = in.readInt();
+        if (id < 0) return null;
+        int count = in.readInt();
+        int dmg = in.readInt();
+        if (id >= com.blockforge.item.Items.count()) return null;
+        return new com.blockforge.item.ItemStack(com.blockforge.item.Items.get(id), count, dmg);
     }
 
     public void saveChunk(Chunk chunk) {

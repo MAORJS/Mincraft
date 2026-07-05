@@ -27,6 +27,7 @@ public final class Blocks {
     public static Block RED_MUSHROOM, BROWN_MUSHROOM;
     public static Block COAL_ORE, IRON_ORE, COPPER_ORE, GOLD_ORE, DIAMOND_ORE;
     public static Block OBSIDIAN, MOSSY_COBBLESTONE, GLOWLAMP;
+    public static Block WORKBENCH, STOVE, STOVE_LIT, CHEST, SPAWNER, GLASS;
 
     private static int nextId = 0;
 
@@ -228,7 +229,7 @@ public final class Blocks {
         for (int i = 0; i < colorNames.length; i++) {
             cube(colorNames[i] + " Cloth", Tiles.cloth(colors[i], s++));
         }
-        translucentCube("Glass", Tiles.glass(0xE8F0F2, 40, s++));
+        GLASS = translucentCube("Glass", Tiles.glass(0xE8F0F2, 40, s++));
         for (int i = 0; i < colorNames.length; i++) {
             int t = TextureAtlas.register(Tiles.glass(colors[i], 120, s++));
             add(colorNames[i] + " Glass", true, false, true, false, false, 0f, t, t, t);
@@ -288,13 +289,13 @@ public final class Blocks {
         // --- utility / decorative ------------------------------------------------
         int wbTop = TextureAtlas.register(Tiles.workbenchTop(0xB08A55, s++));
         int wbSide = TextureAtlas.register(Tiles.planks(0x9A7645, s++));
-        add("Workbench", true, true, false, false, false, 0f, wbTop, wbSide, wbSide);
+        WORKBENCH = add("Workbench", true, true, false, false, false, 0f, wbTop, wbSide, wbSide);
 
         int fuTop = TextureAtlas.register(Tiles.stone(0x707070, s++));
         int fuSide = TextureAtlas.register(Tiles.furnaceFront(0x707070, false, s++));
-        add("Stove", true, true, false, false, false, 0f, fuTop, fuSide, fuTop);
+        STOVE = add("Stove", true, true, false, false, false, 0f, fuTop, fuSide, fuTop);
         int fuLit = TextureAtlas.register(Tiles.furnaceFront(0x707070, true, s++));
-        add("Lit Stove", true, true, false, false, false, 0.6f, fuTop, fuLit, fuTop);
+        STOVE_LIT = add("Lit Stove", true, true, false, false, false, 0.6f, fuTop, fuLit, fuTop);
 
         int bsTop = TextureAtlas.register(Tiles.planks(0xB08A55, s++));
         int bsSide = TextureAtlas.register(Tiles.bookshelf(0xB08A55, s++));
@@ -312,6 +313,11 @@ public final class Blocks {
         cube("Golden Tile", Tiles.checker(0xE8C93E, 0xC9A82E, s++));
         cube("Obsidian Bricks", Tiles.stoneBricks(0x1B1123, s++));
         cube("Charcoal Block", Tiles.stone(0x1E1A16, s++));
+
+        int chTop = TextureAtlas.register(Tiles.planks(0x9A7645, s++));
+        int chSide = TextureAtlas.register(Tiles.chestSide(0xB08A55, s++));
+        CHEST = add("Chest", true, true, false, false, false, 0f, chTop, chSide, chTop);
+        SPAWNER = cube("Mob Spawner", Tiles.cage(0x11151A, 0x39434E, s++));
 
         if (count() < 190) {
             throw new IllegalStateException("expected at least 190 blocks, got " + count());

@@ -598,6 +598,37 @@ public final class Tiles {
         return px;
     }
 
+    /** Chest side: planks with a metal band and latch. */
+    public static int[] chestSide(int plank, long seed) {
+        int[] px = planks(plank, seed);
+        for (int x = 0; x < T; x++) {
+            px[7 * T + x] = shade(0x4A4A4A, 0.9f);
+            px[8 * T + x] = shade(0x5A5A5A, 0.95f);
+        }
+        // latch
+        for (int y = 6; y <= 9; y++) {
+            px[y * T + 7] = shade(0x8A8A8A, 1.0f);
+            px[y * T + 8] = shade(0x707070, 0.95f);
+        }
+        return px;
+    }
+
+    /** Spawner cage: dark base with a bar lattice. */
+    public static int[] cage(int dark, int bar, long seed) {
+        Random r = rng(seed);
+        int[] px = new int[T * T];
+        for (int i = 0; i < px.length; i++) {
+            px[i] = shade(dark, 0.85f + r.nextFloat() * 0.25f);
+        }
+        for (int i = 0; i < T; i++) {
+            for (int k = 1; k < T; k += 4) {
+                px[i * T + k] = shade(bar, 0.85f + r.nextFloat() * 0.2f);
+                px[k * T + i] = shade(bar, 0.85f + r.nextFloat() * 0.2f);
+            }
+        }
+        return px;
+    }
+
     /** Sponge: yellow with dark pores. */
     public static int[] sponge(long seed) {
         Random r = rng(seed);

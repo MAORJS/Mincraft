@@ -21,7 +21,24 @@ public final class World {
     public final TerrainGenerator generator;
     private final WorldStorage storage; // may be null (unsaved world)
 
+    /** All live entities (mobs, item drops, arrows). Ticked by Game. */
+    public final List<com.blockforge.entity.Entity> entities = new ArrayList<>();
+    /** Furnace/chest/spawner state. */
+    public final BlockEntityStore blockEntities = new BlockEntityStore();
+
     private final Map<Long, Chunk> chunks = new HashMap<>();
+
+    private final TerrainGenerator.StructureSink sink = new TerrainGenerator.StructureSink() {
+        @Override
+        public void chestLoot(int wx, int wy, int wz, String lootTable) {
+            blockEntities.fillChestLoot(wx, wy, wz, seed, lootTable);
+        }
+
+        @Override
+        public void spawner(int wx, int wy, int wz, com.blockforge.entity.MobType mobType) {
+            blockEntities.spawnerAt(wx, wy, wz).mobType = mobType;
+        }
+    };
 
     public World(long seed) {
         this(seed, null);
@@ -98,7 +115,7 @@ public final class World {
                         if (storage != null && storage.loadChunk(c)) {
                             c.modified = true; // keep it on disk across sessions
                         } else {
-                            generator.generate(c);
+                            generator.generate(c, sink);
                         }
                         c.generated = true;
                         c.dirty = true;

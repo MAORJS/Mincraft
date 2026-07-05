@@ -9,6 +9,21 @@ import java.util.Random;
  */
 public final class TerrainGenerator {
 
+    /** Receives block-entity setup requests from structure generation. */
+    public interface StructureSink {
+        void chestLoot(int wx, int wy, int wz, String lootTable);
+
+        void spawner(int wx, int wy, int wz, com.blockforge.entity.MobType mobType);
+    }
+
+    private static final StructureSink NULL_SINK = new StructureSink() {
+        public void chestLoot(int wx, int wy, int wz, String lootTable) {
+        }
+
+        public void spawner(int wx, int wy, int wz, com.blockforge.entity.MobType mobType) {
+        }
+    };
+
     private final long seed;
     private final Noise heightNoise;
     private final Noise detailNoise;
@@ -16,6 +31,9 @@ public final class TerrainGenerator {
     private final Noise tempNoise;
     private final Noise moistNoise;
     private final Noise caveNoise;
+    private final Noise tunnelNoiseA;
+    private final Noise tunnelNoiseB;
+    private final Noise cavernNoise;
 
     public TerrainGenerator(long seed) {
         this.seed = seed;
@@ -25,6 +43,9 @@ public final class TerrainGenerator {
         tempNoise = new Noise(seed + 303);
         moistNoise = new Noise(seed + 404);
         caveNoise = new Noise(seed + 505);
+        tunnelNoiseA = new Noise(seed + 606);
+        tunnelNoiseB = new Noise(seed + 707);
+        cavernNoise = new Noise(seed + 808);
     }
 
     private enum Biome {PLAINS, FOREST, DESERT, TUNDRA, MOUNTAINS}
@@ -54,6 +75,10 @@ public final class TerrainGenerator {
 
     /** Fills the chunk with terrain. Deterministic per chunk. */
     public void generate(Chunk chunk) {
+        generate(chunk, NULL_SINK);
+    }
+
+    public void generate(Chunk chunk, StructureSink sink) {
         int ox = chunk.cx * Chunk.SX;
         int oz = chunk.cz * Chunk.SZ;
         Random rng = new Random(seed ^ (chunk.cx * 341873128712L + chunk.cz * 132897987541L));
@@ -110,6 +135,7 @@ public final class TerrainGenerator {
         carveCaves(chunk, ox, oz, height);
         placeOres(chunk, rng);
         decorate(chunk, rng, height, biome);
+        placeStructures(chunk, rng, height, biome, sink);
     }
 
     private int subSurface(Biome b) {
@@ -135,14 +161,163 @@ public final class TerrainGenerator {
                 int wx = ox + x, wz = oz + z;
                 int maxY = Math.min(height[x][z] - 4, 100);
                 for (int y = 4; y <= maxY; y++) {
+                    boolean carve = false;
+
+                    // blob caves
                     float n = caveNoise.fractal3(wx * 0.045f, y * 0.06f, wz * 0.045f, 3, 2f, 0.5f);
-                    // wider caves deeper down
                     float threshold = 0.42f - (y < 30 ? 0.05f : 0f);
-                    if (n > threshold) {
+                    if (n > threshold) carve = true;
+
+                    // spaghetti tunnels: the intersection of two noise ridges
+                    if (!carve) {
+                        float a = tunnelNoiseA.fractal3(wx * 0.02f, y * 0.035f, wz * 0.02f, 2, 2f, 0.5f);
+                        float b = tunnelNoiseB.fractal3(wx * 0.02f, y * 0.035f, wz * 0.02f, 2, 2f, 0.5f);
+                        if (Math.abs(a) < 0.065f && Math.abs(b) < 0.065f) carve = true;
+                    }
+
+                    // large caverns deep down
+                    if (!carve && y < 42) {
+                        float c = cavernNoise.fractal3(wx * 0.014f, y * 0.028f, wz * 0.014f, 2, 2f, 0.5f);
+                        float depthBoost = (42 - y) / 42f * 0.12f;
+                        if (c > 0.52f - depthBoost) carve = true;
+                    }
+
+                    if (carve) {
                         chunk.set(x, y, z, y < 12 ? Blocks.LAVA.id : Blocks.AIR.id);
                     }
                 }
             }
+        }
+    }
+
+    // ------------------------------------------------------------ structures
+
+    private void placeStructures(Chunk chunk, Random rng, int[][] height, Biome[][] biome,
+                                 StructureSink sink) {
+        int ox = chunk.cx * Chunk.SX;
+        int oz = chunk.cz * Chunk.SZ;
+
+        // shipwreck: on beaches / shallow water
+        if (rng.nextInt(48) == 0) {
+            int x = 4 + rng.nextInt(6), z = 4 + rng.nextInt(6);
+            int h = height[x][z];
+            if (h >= World.SEA_LEVEL - 6 && h <= World.SEA_LEVEL + 1) {
+                buildShipwreck(chunk, x, Math.max(4, h - 1), z, rng, sink, ox, oz);
+            }
+        }
+
+        // spawner room deep underground
+        if (rng.nextInt(22) == 0) {
+            int x = 5 + rng.nextInt(5), z = 5 + rng.nextInt(5);
+            int y = 14 + rng.nextInt(26);
+            if (y < height[x][z] - 12) {
+                buildSpawnerRoom(chunk, x, y, z, rng, sink, ox, oz);
+            }
+        }
+
+        // ruined tower on open ground
+        if (rng.nextInt(56) == 0) {
+            int x = 5 + rng.nextInt(5), z = 5 + rng.nextInt(5);
+            int h = height[x][z];
+            Biome b = biome[x][z];
+            if (h > World.SEA_LEVEL + 1 && (b == Biome.PLAINS || b == Biome.FOREST || b == Biome.TUNDRA)) {
+                buildRuinTower(chunk, x, h + 1, z, rng, sink, ox, oz);
+            }
+        }
+    }
+
+    private void buildShipwreck(Chunk chunk, int cx, int y, int cz, Random rng,
+                                StructureSink sink, int ox, int oz) {
+        int planks = Blocks.OAK_LOG.id + 4; // oak planks
+        int len = 9, wid = 4;
+        boolean alongX = rng.nextBoolean();
+        for (int i = -len / 2; i <= len / 2; i++) {
+            int half = Math.max(1, wid / 2 - (Math.abs(i) >= len / 2 - 1 ? 1 : 0));
+            for (int j = -half; j <= half; j++) {
+                int x = cx + (alongX ? i : j);
+                int z = cz + (alongX ? j : i);
+                if (!Chunk.inBounds(x, y, z)) continue;
+                chunk.set(x, y, z, planks);                         // hull floor
+                if (Math.abs(j) == half && Chunk.inBounds(x, y + 1, z)) {
+                    chunk.set(x, y + 1, z, planks);                 // hull sides
+                    if (rng.nextInt(3) == 0 && Chunk.inBounds(x, y + 2, z)) {
+                        chunk.set(x, y + 2, z, planks);
+                    }
+                }
+            }
+        }
+        // mast (often broken)
+        int mastH = 2 + rng.nextInt(4);
+        for (int i = 1; i <= mastH; i++) {
+            if (Chunk.inBounds(cx, y + i, cz)) chunk.set(cx, y + i, cz, Blocks.OAK_LOG.id);
+        }
+        // loot chest in the hold
+        int chestX = cx + (alongX ? 2 : 0);
+        int chestZ = cz + (alongX ? 0 : 2);
+        if (Chunk.inBounds(chestX, y + 1, chestZ)) {
+            chunk.set(chestX, y + 1, chestZ, Blocks.CHEST.id);
+            sink.chestLoot(ox + chestX, y + 1, oz + chestZ, "shipwreck");
+        }
+    }
+
+    private void buildSpawnerRoom(Chunk chunk, int cx, int cy, int cz, Random rng,
+                                  StructureSink sink, int ox, int oz) {
+        int half = 3;
+        for (int x = cx - half; x <= cx + half; x++) {
+            for (int z = cz - half; z <= cz + half; z++) {
+                for (int y = cy; y <= cy + 4; y++) {
+                    if (!Chunk.inBounds(x, y, z)) continue;
+                    boolean wall = x == cx - half || x == cx + half
+                            || z == cz - half || z == cz + half
+                            || y == cy || y == cy + 4;
+                    if (wall) {
+                        chunk.set(x, y, z, rng.nextInt(3) == 0
+                                ? Blocks.MOSSY_COBBLESTONE.id : Blocks.COBBLESTONE.id);
+                    } else {
+                        chunk.set(x, y, z, Blocks.AIR.id);
+                    }
+                }
+            }
+        }
+        // doorway gap
+        chunk.set(cx - half, cy + 1, cz, Blocks.AIR.id);
+        chunk.set(cx - half, cy + 2, cz, Blocks.AIR.id);
+
+        chunk.set(cx, cy + 1, cz, Blocks.SPAWNER.id);
+        sink.spawner(ox + cx, cy + 1, oz + cz,
+                rng.nextBoolean() ? com.blockforge.entity.MobType.ZOMBIE
+                        : com.blockforge.entity.MobType.SPIDER);
+
+        int chestX = cx + half - 1, chestZ = cz + half - 1;
+        chunk.set(chestX, cy + 1, chestZ, Blocks.CHEST.id);
+        sink.chestLoot(ox + chestX, cy + 1, oz + chestZ, "dungeon");
+    }
+
+    private void buildRuinTower(Chunk chunk, int cx, int y, int cz, Random rng,
+                                StructureSink sink, int ox, int oz) {
+        int h = 5 + rng.nextInt(5);
+        for (int level = 0; level < h; level++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    boolean wall = Math.abs(dx) == 2 || Math.abs(dz) == 2;
+                    if (!wall) continue;
+                    if (Math.abs(dx) == 2 && Math.abs(dz) == 2 && rng.nextInt(4) == 0) continue;
+                    // crumbling top
+                    if (level > h - 3 && rng.nextInt(3) == 0) continue;
+                    int x = cx + dx, z = cz + dz;
+                    if (Chunk.inBounds(x, y + level, z)) {
+                        chunk.set(x, y + level, z, rng.nextInt(4) == 0
+                                ? Blocks.MOSSY_COBBLESTONE.id : Blocks.COBBLESTONE.id);
+                    }
+                }
+            }
+        }
+        // doorway
+        chunk.set(cx + 2, y, cz, Blocks.AIR.id);
+        chunk.set(cx + 2, y + 1, cz, Blocks.AIR.id);
+        if (Chunk.inBounds(cx, y, cz)) {
+            chunk.set(cx, y, cz, Blocks.CHEST.id);
+            sink.chestLoot(ox + cx, y, oz + cz, "ruin");
         }
     }
 

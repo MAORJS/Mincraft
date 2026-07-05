@@ -29,6 +29,7 @@ public final class TitleFlow {
     private final StringBuilder nameField = new StringBuilder("New World");
     private final StringBuilder seedField = new StringBuilder();
     private final StringBuilder renameField = new StringBuilder();
+    private boolean createCreative = false;
 
     private WorldInfo startWorld;
     private boolean quitRequested;
@@ -214,10 +215,16 @@ public final class TitleFlow {
         gui.text("SEED (LEAVE BLANK FOR RANDOM)", x, y - 24, 2f, 0.85f, 0.85f, 0.85f);
         boolean enter2 = gui.textField(2, seedField, 20, x, y, fw, fh);
 
-        y += 90;
+        y += 70;
+        if (gui.button("GAME MODE: " + (createCreative ? "CREATIVE" : "SURVIVAL"), x, y, fw, fh)) {
+            createCreative = !createCreative;
+        }
+
+        y += fh + 20;
         if (gui.button("CREATE WORLD", x, y, fw, fh) || enter1 || enter2) {
             long seed = parseSeed(seedField.toString());
-            WorldInfo info = WorldStorage.createWorld(nameField.toString(), seed);
+            WorldInfo info = WorldStorage.createWorld(nameField.toString(), seed,
+                    createCreative ? "creative" : "survival");
             gui.unfocus();
             startWorld = info;
         }

@@ -61,10 +61,13 @@ public final class Main {
             glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
         }
 
-        // registry + procedural art, then one shared GL atlas for world & GUI
+        // registries + procedural art, then one shared GL atlas for world & GUI
         Blocks.registerAll();
+        com.blockforge.item.Items.registerAll();
+        com.blockforge.entity.MobModels.registerAll();
         int atlasTexture = TextureAtlas.createGLTexture();
-        System.out.println("BlockForge: " + Blocks.count() + " block types registered.");
+        System.out.println("BlockForge: " + Blocks.count() + " block types, "
+                + com.blockforge.item.Items.count() + " items registered.");
 
         SoundEngine sound = new SoundEngine(settings);
         Gui gui = new Gui(atlasTexture, sound);

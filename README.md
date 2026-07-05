@@ -8,6 +8,41 @@ image assets.
 
 ## Features
 
+### Survival mode
+
+- **Health, hunger, and air** — hearts, hunger haunches, and dive bubbles on
+  the HUD; fall damage, drowning, lava, starvation; health regenerates when
+  well fed; sprinting drains hunger; death drops your items with a respawn
+  screen.
+- **Full inventory** — 27 backpack + 9 hotbar slots with drag-and-drop,
+  right-click half/single-stack handling, stack counts and tool durability
+  bars, `Q` to toss the held item.
+- **Mining with tools** — per-block hardness and break progress; pickaxes,
+  axes, shovels, swords, and a bow in wood/stone/iron/gold/diamond tiers with
+  durability; ore tiers gate drops (stone pick for iron, iron pick for
+  diamond...); ores drop raw ore items for smelting.
+- **Crafting** — 2x2 grid in the inventory, 3x3 at the workbench; recipes for
+  planks, sticks, every tool tier, stations, storage, lamps, mineral blocks,
+  arrows, and the bow.
+- **Furnace (stove)** — input/fuel/output smelting with live progress, keeps
+  burning while closed, lights up while lit; smelts raw metals, glass, stone,
+  and cooks meat.
+- **Mobs & animals** — cows, pigs, sheep, and chickens wander the surface and
+  drop food and materials; zombies, spiders, and arrow-shooting skeletons
+  hunt you at night and underground; the undead burn at dawn. All rendered as
+  animated box models with procedurally painted hides.
+- **Item drops** — mined blocks and mob loot fall as spinning pickups that
+  merge, drift toward you, and pop into the inventory.
+- **Structures** — shipwrecks with loot chests on beaches, underground
+  spawner rooms (the spawner block never drops), and ruined towers; chests
+  hold seeded loot.
+- **Expanded caves** — blob caves, winding spaghetti tunnels, and large deep
+  caverns with lava lakes.
+- **Creative mode** still available per world: instant breaking, infinite
+  items (all 271 in a scrollable browser), flying, no damage.
+
+### Engine
+
 - **190+ block types** — stones, soils, sands, 4 wood species (logs, planks,
   leaves, saplings), 14 ores in surface *and* deep variants, 14 refined mineral
   blocks, 20 masonry blocks, 16-color cloth / glass / plaster / ceramic
@@ -94,16 +129,20 @@ mvn compile exec:java
 | `Left Shift` | Fly down |
 | `Left Ctrl` | Sprint |
 | `F` | Toggle fly mode |
-| Left click | Break block |
-| Right click | Place block |
-| Middle click | Pick targeted block into the hotbar |
+| Left click | Break block (hold in survival) / attack mob |
+| Right click | Place block, open workbench/stove/chest, eat food, shoot bow |
+| `Shift` + right click | Place a block against a container instead of opening it |
+| Middle click | Pick targeted block (creative) |
 | `1`–`9` / scroll | Select hotbar slot |
 | `E` | Open / close the inventory |
+| `Q` | Drop the held item |
 | `Esc` | Pause menu (options, save & quit) |
 
-In the inventory: scroll to browse all blocks, left-click to pick a block up,
-click a hotbar slot to drop it there, right-click a block to send it straight
-to the selected hotbar slot.
+In container screens: left-click picks up / places a stack, right-click takes
+half or places one; craft by laying patterns in the 2x2 (inventory) or 3x3
+(workbench) grid and clicking the result. In creative the inventory is a
+scrollable browser of all items — left-click puts a stack on the cursor,
+right-click sends it to the selected hotbar slot.
 
 The window title shows FPS, position, the held block, and the registered block
 count.
