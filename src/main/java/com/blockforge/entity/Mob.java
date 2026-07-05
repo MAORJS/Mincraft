@@ -23,6 +23,8 @@ public final class Mob extends Entity {
     private float attackCooldown;
     private float shootCooldown;
     public float burnTimer;
+    /** Set by Game while the mob is on fire in daylight (drives the tint). */
+    public boolean burning;
 
     /** Set by Game each frame so AI can see the player. */
     public Vector3f playerPos;
@@ -140,10 +142,13 @@ public final class Mob extends Entity {
     public boolean damage(float amount, float knockX, float knockZ) {
         health -= amount;
         hurtTime = 0.4f;
-        velocity.x += knockX;
-        velocity.z += knockZ;
-        velocity.y = Math.max(velocity.y, 5.5f);
-        onGround = false;
+        // only launch the mob when the hit actually carries knockback
+        if (knockX != 0 || knockZ != 0) {
+            velocity.x += knockX;
+            velocity.z += knockZ;
+            velocity.y = Math.max(velocity.y, 5.5f);
+            onGround = false;
+        }
         if (health <= 0) {
             dead = true;
             return true;

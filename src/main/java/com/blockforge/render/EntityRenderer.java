@@ -18,9 +18,30 @@ import java.util.List;
 public final class EntityRenderer {
 
     private static Mesh unitCube;
+    private static Mesh frontQuad;
     private static final Matrix4f model = new Matrix4f();
 
     private EntityRenderer() {
+    }
+
+    /** Unit quad in the z=0 plane (the cube's front face), drawn for faceTile. */
+    private static Mesh quad() {
+        if (frontQuad != null) return frontQuad;
+        float[][] c = {{1, 1, 0}, {1, 0, 0}, {0, 0, 0}, {0, 1, 0}};
+        float[][] uv = {{0, 1}, {0, 0}, {1, 0}, {1, 1}};
+        int[] order = {0, 1, 2, 0, 2, 3};
+        float[] data = new float[6 * 6];
+        int i = 0;
+        for (int o : order) {
+            data[i++] = c[o][0];
+            data[i++] = c[o][1];
+            data[i++] = c[o][2];
+            data[i++] = uv[o][0];
+            data[i++] = uv[o][1];
+            data[i++] = 0.82f;
+        }
+        frontQuad = new Mesh(data);
+        return frontQuad;
     }
 
     /** Unit cube [0,1]^3 with per-face shade, UV [0,1] per face. */
@@ -81,8 +102,15 @@ public final class EntityRenderer {
         if (parts == null) return;
         float swing = (float) Math.sin(mob.animTime) * 0.55f;
         float yawRad = (float) Math.toRadians(-mob.yaw);
-        // hurt flash: brighten via daylight override is complex; nudge upward instead
-        float hurtLift = mob.hurtTime > 0 ? (float) Math.sin(mob.hurtTime * 25) * 0.03f : 0f;
+
+        // status tint: red flash when hurt, orange glow while burning
+        if (mob.hurtTime > 0) {
+            shader.setVec3("uTint", 1f, 0.35f, 0.35f);
+        } else if (mob.burning) {
+            shader.setVec3("uTint", 1f, 0.55f, 0.2f);
+        } else {
+            shader.setVec3("uTint", 1f, 1f, 1f);
+        }
 
         for (MobModels.Part p : parts) {
             float rot = switch (p.anim()) {
@@ -91,7 +119,7 @@ public final class EntityRenderer {
                 default -> 0f;
             };
             model.identity()
-                    .translate(mob.position.x, mob.position.y + hurtLift, mob.position.z)
+                    .translate(mob.position.x, mob.position.y, mob.position.z)
                     .rotateY(yawRad)
                     .translate(p.px(), p.py(), p.pz())
                     .rotateX(rot)
@@ -100,7 +128,22 @@ public final class EntityRenderer {
             shader.setMat4("uModel", model);
             tileUV(shader, p.tile());
             mesh.draw();
+
+            // eyes/snout only on the front face, slightly proud to avoid z-fighting
+            if (p.faceTile() >= 0) {
+                model.identity()
+                        .translate(mob.position.x, mob.position.y, mob.position.z)
+                        .rotateY(yawRad)
+                        .translate(p.px(), p.py(), p.pz())
+                        .rotateX(rot)
+                        .translate(p.ox(), p.oy(), p.oz() - 0.002f)
+                        .scale(p.sx() / 16f, p.sy() / 16f, p.sz() / 16f);
+                shader.setMat4("uModel", model);
+                tileUV(shader, p.faceTile());
+                quad().draw();
+            }
         }
+        shader.setVec3("uTint", 1f, 1f, 1f);
     }
 
     private static void renderItem(Shader shader, Mesh mesh, ItemEntity item, double time) {

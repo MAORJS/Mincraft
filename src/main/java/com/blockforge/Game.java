@@ -381,13 +381,17 @@ public final class Game {
                     float len = Math.max(0.01f, (float) Math.sqrt(d.x * d.x + d.z * d.z));
                     player.damage(mob.type.attackDamage, d.x / len * 5f, d.z / len * 5f);
                 }
-                // undead burn in daylight
-                if (mob.type.undead && dayLight() > 0.75f && skyVisible(mob.position)) {
+                // monsters burn in daylight when the sky is overhead
+                if (mob.type.hostile && dayLight() > 0.65f && skyVisible(mob.position)) {
+                    mob.burning = true;
                     mob.burnTimer += dt;
-                    if (mob.burnTimer > 1f) {
+                    if (mob.burnTimer > 0.8f) {
                         mob.burnTimer = 0;
-                        if (mob.damage(2, 0, 0)) dropMobLoot(mob);
+                        if (mob.damage(3, 0, 0)) dropMobLoot(mob);
                     }
+                } else {
+                    mob.burning = false;
+                    mob.burnTimer = 0;
                 }
                 // despawn far hostiles
                 if (mob.type.hostile && mob.distanceTo(player.position) > 60) mob.dead = true;
@@ -519,6 +523,21 @@ public final class Game {
         return true;
     }
 
+    /** Max mobs of one class allowed within {@code AREA_RADIUS} of a spawn point. */
+    private static final int AREA_CAP = 5;
+    private static final float AREA_RADIUS = 20f;
+
+    private int mobsNearOfClass(int x, int y, int z, boolean hostile) {
+        int n = 0;
+        for (Entity e : world.entities) {
+            if (e instanceof Mob m && m.type.hostile == hostile) {
+                float dx = e.position.x - x, dy = e.position.y - y, dz = e.position.z - z;
+                if (dx * dx + dy * dy + dz * dz < AREA_RADIUS * AREA_RADIUS) n++;
+            }
+        }
+        return n;
+    }
+
     private void trySpawnMobs() {
         boolean night = dayLight() < 0.4f;
         int hostiles = 0, passives = 0;
@@ -539,7 +558,7 @@ public final class Game {
                 // surface spawn
                 int y = world.surfaceHeight(x, z) + 1;
                 boolean dark = night || !skyVisible(new Vector3f(x + 0.5f, y, z + 0.5f));
-                if (dark && hostiles < 20) {
+                if (dark && hostiles < 20 && mobsNearOfClass(x, y, z, true) < AREA_CAP) {
                     MobType t = switch (rng.nextInt(3)) {
                         case 0 -> MobType.ZOMBIE;
                         case 1 -> MobType.SPIDER;
@@ -550,6 +569,7 @@ public final class Game {
                         hostiles++;
                     }
                 } else if (!night && passives < 10
+                        && mobsNearOfClass(x, y, z, false) < AREA_CAP
                         && world.getBlockId(x, y - 1, z) == Blocks.GRASS.id) {
                     MobType t = switch (rng.nextInt(4)) {
                         case 0 -> MobType.COW;
@@ -566,7 +586,7 @@ public final class Game {
                 // cave spawn: random depth below the surface
                 int surface = world.surfaceHeight(x, z);
                 int y = 8 + rng.nextInt(Math.max(1, surface - 16));
-                if (y < surface - 6) {
+                if (y < surface - 6 && mobsNearOfClass(x, y, z, true) < AREA_CAP) {
                     MobType t = rng.nextBoolean() ? MobType.ZOMBIE : MobType.SKELETON;
                     if (canStand(x, y, z, t)) {
                         world.entities.add(new Mob(world, t, x + 0.5f, y, z + 0.5f));

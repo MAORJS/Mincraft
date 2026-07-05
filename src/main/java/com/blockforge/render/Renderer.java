@@ -50,13 +50,14 @@ public final class Renderer {
             uniform float uFogEnd;
             uniform float uDayLight;
             uniform int uCutout;
+            uniform vec3 uTint;
             out vec4 fragColor;
             void main() {
                 vec4 tex = texture(uTex, vUV);
                 if (uCutout == 1 && tex.a < 0.5) discard;
                 // negative shade marks emissive faces that ignore daylight
                 float light = vShade < 0.0 ? -vShade : vShade * uDayLight;
-                vec3 col = tex.rgb * min(light, 1.25);
+                vec3 col = tex.rgb * uTint * min(light, 1.25);
                 float fog = clamp((vDist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
                 fragColor = vec4(mix(col, uFogColor, fog), tex.a);
             }
@@ -158,6 +159,7 @@ public final class Renderer {
         worldShader.setMat4("uModel", identity);
         worldShader.setVec2("uUVOffset", 0f, 0f);
         worldShader.setVec2("uUVScale", 1f, 1f);
+        worldShader.setVec3("uTint", 1f, 1f, 1f);
         worldShader.setInt("uTex", 0);
         worldShader.setVec3("uFogColor", skyColor.x, skyColor.y, skyColor.z);
         worldShader.setFloat("uFogStart", fogStart);
@@ -185,6 +187,7 @@ public final class Renderer {
             worldShader.setMat4("uModel", identity);
             worldShader.setVec2("uUVOffset", 0f, 0f);
             worldShader.setVec2("uUVScale", 1f, 1f);
+            worldShader.setVec3("uTint", 1f, 1f, 1f);
         }
 
         // translucent pass (water, glass, ice)

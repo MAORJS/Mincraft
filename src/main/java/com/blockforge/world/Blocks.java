@@ -180,10 +180,10 @@ public final class Blocks {
                 0x9A55D2, 0x62E0DC};
         Block[] surfaceOres = new Block[oreNames.length];
         for (int i = 0; i < oreNames.length; i++) {
-            surfaceOres[i] = cube(oreNames[i] + " Ore", Tiles.ore(stoneC, oreColors[i], s++));
+            surfaceOres[i] = cube(oreNames[i] + " Ore", Tiles.oreNuggets(stoneC, oreColors[i], s++));
         }
         for (int i = 0; i < oreNames.length; i++) {
-            cube("Deep " + oreNames[i] + " Ore", Tiles.ore(deepC, oreColors[i], s++));
+            cube("Deep " + oreNames[i] + " Ore", Tiles.oreNuggets(deepC, oreColors[i], s++));
         }
         COAL_ORE = surfaceOres[0];
         IRON_ORE = surfaceOres[1];

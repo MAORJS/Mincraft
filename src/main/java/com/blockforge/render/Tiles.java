@@ -215,7 +215,7 @@ public final class Tiles {
         return px;
     }
 
-    /** Ore: stone base with clustered blobs of a mineral color. */
+    /** Scattered patches of an accent color (moss, cracks). */
     public static int[] ore(int stoneBase, int mineral, long seed) {
         int[] px = stone(stoneBase, seed);
         Random r = rng(seed + 999);
@@ -228,6 +228,40 @@ public final class Tiles {
                 int y = clampT(cy + r.nextInt(size) - size / 2);
                 px[y * T + x] = shade(mineral, 0.85f + r.nextFloat() * 0.3f);
             }
+        }
+        return px;
+    }
+
+    /**
+     * Ore block: bold diamond-shaped nuggets with a dark rim, bright body and
+     * sparkle highlight — high contrast so each ore reads clearly at a
+     * distance.
+     */
+    public static int[] oreNuggets(int stoneBase, int mineral, long seed) {
+        int[] px = stone(stoneBase, seed);
+        Random r = rng(seed + 999);
+        int rim = shade(mineral, 0.35f);
+        int nuggets = 4 + r.nextInt(2);
+        for (int n = 0; n < nuggets; n++) {
+            int cx = 3 + r.nextInt(10);
+            int cy = 3 + r.nextInt(10);
+            int rad = 2 + (n == 0 ? 1 : r.nextInt(2)); // one big nugget guaranteed
+            for (int dy = -rad; dy <= rad; dy++) {
+                for (int dx = -rad; dx <= rad; dx++) {
+                    int d = Math.abs(dx) + Math.abs(dy);
+                    if (d > rad) continue;
+                    int x = clampT(cx + dx), y = clampT(cy + dy);
+                    if (d == rad) {
+                        px[y * T + x] = rim;                              // dark outline
+                    } else if (d <= rad - 2 && dx <= 0 && dy <= 0) {
+                        px[y * T + x] = shade(mineral, 1.35f);            // lit corner
+                    } else {
+                        px[y * T + x] = shade(mineral, 0.95f + r.nextFloat() * 0.2f);
+                    }
+                }
+            }
+            // sparkle
+            px[clampT(cy - 1) * T + clampT(cx - 1)] = 0xFFFFFFFF;
         }
         return px;
     }
