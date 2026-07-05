@@ -93,13 +93,26 @@ public final class Main {
         double fpsTimer = lastTime;
         int frames = 0;
 
+        int[] winw = new int[1], winh = new int[1];
+
         while (!glfwWindowShouldClose(window)) {
+            // clear last frame's one-shot events BEFORE polling, so the events
+            // gathered here stay visible to this frame's update
+            input.endFrame();
+            glfwPollEvents();
+
             double now = glfwGetTime();
             double dt = now - lastTime;
             lastTime = now;
 
             glfwGetFramebufferSize(window, fbw, fbh);
+            glfwGetWindowSize(window, winw, winh);
             int w = fbw[0], h = fbh[0];
+            // cursor coords arrive in window space; the GUI works in
+            // framebuffer pixels (they differ on HiDPI displays)
+            if (winw[0] > 0 && winh[0] > 0) {
+                input.setGuiScale(w / (float) winw[0], h / (float) winh[0]);
+            }
             if (w > 0 && h > 0) {
                 glViewport(0, 0, w, h);
 
@@ -132,8 +145,6 @@ public final class Main {
             }
 
             glfwSwapBuffers(window);
-            glfwPollEvents();
-            input.endFrame();
 
             frames++;
             if (now - fpsTimer >= 0.5) {

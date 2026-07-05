@@ -18,6 +18,7 @@ public final class Input {
 
     private double lastX, lastY;
     private boolean firstMouse = true;
+    private float guiScaleX = 1f, guiScaleY = 1f;
 
     public void install(long window) {
         glfwSetKeyCallback(window, (w, key, sc, action, mods) -> {
@@ -75,12 +76,19 @@ public final class Input {
         return mousePressed[button];
     }
 
+    /** Window-to-framebuffer coordinate scale (HiDPI displays). */
+    public void setGuiScale(float sx, float sy) {
+        guiScaleX = sx;
+        guiScaleY = sy;
+    }
+
+    /** Cursor position in framebuffer pixels (GUI space). */
     public double mouseX() {
-        return lastX;
+        return lastX * guiScaleX;
     }
 
     public double mouseY() {
-        return lastY;
+        return lastY * guiScaleY;
     }
 
     /** Called at the end of each frame to reset one-shot events. */
