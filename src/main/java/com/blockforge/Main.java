@@ -1,29 +1,38 @@
 package com.blockforge;
 
+import com.blockforge.audio.SoundEngine;
+import com.blockforge.gui.Gui;
+import com.blockforge.gui.OptionsMenu;
+import com.blockforge.gui.TitleFlow;
+import com.blockforge.render.TextureAtlas;
+import com.blockforge.save.WorldStorage.WorldInfo;
 import com.blockforge.world.Blocks;
 import org.lwjgl.glfw.GLFWErrorCallback;
+import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.system.Platform;
 
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.opengl.GL33C.glViewport;
+import static org.lwjgl.opengl.GL33C.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
 /**
- * Entry point: window creation and the main loop.
+ * Entry point and application state machine: title/menu screens when no world
+ * is loaded, the Game itself once the player picks a world.
  *
  * On macOS run with the JVM flag -XstartOnFirstThread (GLFW requirement).
  */
 public final class Main {
 
+    private static long window;
+    private static int windowedX = 80, windowedY = 60, windowedW = 1280, windowedH = 720;
+
     public static void main(String[] args) {
-        if (Platform.get() == Platform.MACOSX
-                && System.getProperty("os.arch") != null
-                && !"true".equalsIgnoreCase(System.getenv("JAVA_STARTED_ON_FIRST_THREAD_" + ProcessHandle.current().pid()))) {
+        if (Platform.get() == Platform.MACOSX) {
             System.out.println("Note: on macOS, launch with: java -XstartOnFirstThread -jar blockforge.jar");
         }
 
-        long seed = args.length > 0 ? parseSeed(args[0]) : 1337L;
+        Settings settings = Settings.load();
 
         GLFWErrorCallback.createPrint(System.err).set();
         if (!glfwInit()) {
@@ -37,33 +46,52 @@ public final class Main {
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
-        long window = glfwCreateWindow(1280, 720, "BlockForge", NULL, NULL);
+        window = glfwCreateWindow(windowedW, windowedH, "BlockForge", NULL, NULL);
         if (window == NULL) {
             throw new IllegalStateException("could not create window");
         }
 
         glfwMakeContextCurrent(window);
-        glfwSwapInterval(1); // vsync
+        glfwSwapInterval(settings.vsync ? 1 : 0);
         GL.createCapabilities();
 
         Input input = new Input();
         input.install(window);
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         if (glfwRawMouseMotionSupported()) {
             glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
         }
 
-        // block + texture registration must happen after GL is current
-        // (textures upload in the Renderer constructor inside Game)
+        // registry + procedural art, then one shared GL atlas for world & GUI
         Blocks.registerAll();
+        int atlasTexture = TextureAtlas.createGLTexture();
+        System.out.println("BlockForge: " + Blocks.count() + " block types registered.");
 
-        Game game = new Game(window, input, seed);
+        SoundEngine sound = new SoundEngine(settings);
+        Gui gui = new Gui(atlasTexture, sound);
+        OptionsMenu.WindowController winCtrl = new OptionsMenu.WindowController() {
+            @Override
+            public void applyVsync(boolean vsync) {
+                glfwSwapInterval(vsync ? 1 : 0);
+            }
+
+            @Override
+            public void applyFullscreen(boolean fullscreen) {
+                setFullscreen(fullscreen);
+            }
+        };
+        OptionsMenu optionsMenu = new OptionsMenu(settings, winCtrl, sound);
+        TitleFlow title = new TitleFlow();
+
+        if (settings.fullscreen) {
+            setFullscreen(true);
+        }
+
+        Game game = null;
 
         int[] fbw = new int[1], fbh = new int[1];
         double lastTime = glfwGetTime();
         double fpsTimer = lastTime;
         int frames = 0;
-        double fps = 0;
 
         while (!glfwWindowShouldClose(window)) {
             double now = glfwGetTime();
@@ -71,35 +99,82 @@ public final class Main {
             lastTime = now;
 
             glfwGetFramebufferSize(window, fbw, fbh);
-            if (fbw[0] > 0 && fbh[0] > 0) {
-                glViewport(0, 0, fbw[0], fbh[0]);
-                game.frame(dt, fbw[0], fbh[0]);
+            int w = fbw[0], h = fbh[0];
+            if (w > 0 && h > 0) {
+                glViewport(0, 0, w, h);
+
+                if (game != null) {
+                    game.frame(dt, w, h);
+                    if (game.quitToTitleRequested()) {
+                        game.delete();
+                        game = null;
+                        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                        input.resetMouse();
+                        title.reset();
+                        glfwSetWindowTitle(window, "BlockForge");
+                    }
+                } else {
+                    glClearColor(0.08f, 0.08f, 0.1f, 1f);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    gui.begin(input, w, h, now);
+                    title.frame(gui, input);
+                    gui.end();
+
+                    WorldInfo start = title.consumeStart();
+                    if (start != null) {
+                        game = new Game(window, input, gui, sound, settings, optionsMenu,
+                                start, atlasTexture);
+                    }
+                    if (title.quitRequested()) {
+                        glfwSetWindowShouldClose(window, true);
+                    }
+                }
             }
 
             glfwSwapBuffers(window);
             glfwPollEvents();
+            input.endFrame();
 
             frames++;
             if (now - fpsTimer >= 0.5) {
-                fps = frames / (now - fpsTimer);
+                double fps = frames / (now - fpsTimer);
                 frames = 0;
                 fpsTimer = now;
-                glfwSetWindowTitle(window, game.debugTitle(fps));
+                if (game != null) {
+                    glfwSetWindowTitle(window, game.debugTitle(fps));
+                }
             }
         }
 
-        game.delete();
+        if (game != null) {
+            game.saveAll();
+            game.delete();
+        }
+        settings.save();
+        gui.delete();
+        sound.delete();
+        glDeleteTextures(atlasTexture);
         glfwDestroyWindow(window);
         glfwTerminate();
         GLFWErrorCallback cb = glfwSetErrorCallback(null);
         if (cb != null) cb.free();
     }
 
-    private static long parseSeed(String s) {
-        try {
-            return Long.parseLong(s);
-        } catch (NumberFormatException e) {
-            return s.hashCode();
+    private static void setFullscreen(boolean fullscreen) {
+        long monitor = glfwGetPrimaryMonitor();
+        GLFWVidMode mode = glfwGetVideoMode(monitor);
+        if (mode == null) return;
+        if (fullscreen) {
+            int[] x = new int[1], y = new int[1], w = new int[1], h = new int[1];
+            glfwGetWindowPos(window, x, y);
+            glfwGetWindowSize(window, w, h);
+            windowedX = x[0];
+            windowedY = y[0];
+            windowedW = w[0];
+            windowedH = h[0];
+            glfwSetWindowMonitor(window, monitor, 0, 0, mode.width(), mode.height(), mode.refreshRate());
+        } else {
+            glfwSetWindowMonitor(window, NULL, windowedX, windowedY, windowedW, windowedH, 0);
         }
     }
 }

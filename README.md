@@ -23,6 +23,24 @@ image assets.
   AABB collision, and a fly mode.
 - **Block interaction** — raycast targeting with a selection outline, breaking,
   placing, and middle-click block picking.
+- **Creative inventory** (`E`) — scrollable grid of every block with tooltips;
+  left-click picks a block onto the cursor, drop it into any of the nine free
+  hotbar slots, right-click sends it straight to the selected slot.
+- **Title screen & world management** — logo screen with a Singleplayer
+  button leading to a world list (play, rename, delete, new world) or straight
+  to world creation when no worlds exist; worlds take a name and optional seed.
+- **World saving** — player-modified chunks, player state, hotbar, and time of
+  day persist per world under `~/.blockforge/worlds/`; autosaves every 30
+  seconds and on quit. Untouched terrain regenerates deterministically from
+  the seed, keeping saves small.
+- **Pause & options menus** (`Esc`) — video settings (fullscreen, vsync, FOV,
+  render distance), audio settings (master/effects volume, UI sounds), and
+  graphics settings (brightness, fog, day-night cycle, block outline), all
+  applied live and persisted to `~/.blockforge/options.txt`.
+- **Synthesized audio** — OpenAL sound engine whose click/break/place sounds
+  are generated from waveforms at startup; no audio files ship with the game.
+- **Procedural bitmap font** — the entire UI is drawn with a 5x7 pixel font
+  defined in code, like every other art asset.
 - **Day/night cycle** with sky tint, dynamic lighting, and distance fog.
 - **Fully procedural texture atlas** — 16x16 tiles painted at startup by the
   `Tiles` painter (wood grain, brick courses, ore blobs, cloth weave, ...).
@@ -78,10 +96,14 @@ mvn compile exec:java
 | `F` | Toggle fly mode |
 | Left click | Break block |
 | Right click | Place block |
-| Middle click | Pick targeted block |
+| Middle click | Pick targeted block into the hotbar |
 | `1`–`9` / scroll | Select hotbar slot |
-| `Z` / `X` (or PgUp / PgDn) | Page the hotbar through all 190+ blocks |
-| `Esc` | Release / capture the mouse |
+| `E` | Open / close the inventory |
+| `Esc` | Pause menu (options, save & quit) |
+
+In the inventory: scroll to browse all blocks, left-click to pick a block up,
+click a hotbar slot to drop it there, right-click a block to send it straight
+to the selected hotbar slot.
 
 The window title shows FPS, position, the held block, and the registered block
 count.
@@ -90,9 +112,17 @@ count.
 
 ```
 src/main/java/com/blockforge/
-├── Main.java                 window + main loop
-├── Game.java                 simulation, streaming, interaction, hotbar
-├── Input.java                GLFW input state
+├── Main.java                 window, app state machine (menus vs in-game)
+├── Game.java                 simulation, streaming, interaction, HUD,
+│                             pause/options/inventory screens
+├── Input.java                GLFW input state (keys, mouse, text input)
+├── Settings.java             persisted options (~/.blockforge/options.txt)
+├── audio/SoundEngine.java    OpenAL engine, waveform-synthesized sounds
+├── gui/
+│   ├── Gui.java              immediate-mode widgets (buttons, sliders, fields)
+│   ├── TitleFlow.java        title / world list / create / rename screens
+│   └── OptionsMenu.java      video, audio, graphics settings pages
+├── save/WorldStorage.java    world folders, metadata, gzipped chunk files
 ├── player/Player.java        AABB physics & camera
 ├── world/
 │   ├── Block.java            block type definition
@@ -107,9 +137,10 @@ src/main/java/com/blockforge/
     ├── ChunkMesher.java      chunk → vertex data
     ├── Mesh.java             VAO/VBO wrapper
     ├── Shader.java           GLSL program wrapper
+    ├── Batch2D.java          dynamic 2D quad batch for the GUI
+    ├── Font.java             procedural 5x7 bitmap font
     ├── TextureAtlas.java     runtime-built atlas
-    ├── Tiles.java            procedural tile painters (all in-game art)
-    └── Hud.java              crosshair + hotbar overlay
+    └── Tiles.java            procedural tile painters (all in-game art)
 ```
 
 ## License

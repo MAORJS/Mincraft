@@ -1,5 +1,7 @@
 package com.blockforge.world;
 
+import com.blockforge.save.WorldStorage;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -8,7 +10,8 @@ import java.util.Map;
 
 /**
  * Infinite chunked world. Chunks are generated lazily around the player with
- * a small per-frame budget so the game never stalls.
+ * a small per-frame budget so the game never stalls. Player-modified chunks
+ * are persisted through the optional {@link WorldStorage}.
  */
 public final class World {
 
@@ -16,11 +19,17 @@ public final class World {
 
     public final long seed;
     public final TerrainGenerator generator;
+    private final WorldStorage storage; // may be null (unsaved world)
 
     private final Map<Long, Chunk> chunks = new HashMap<>();
 
     public World(long seed) {
+        this(seed, null);
+    }
+
+    public World(long seed, WorldStorage storage) {
         this.seed = seed;
+        this.storage = storage;
         this.generator = new TerrainGenerator(seed);
     }
 
@@ -58,6 +67,7 @@ public final class World {
         int lz = Math.floorMod(wz, Chunk.SZ);
         c.set(lx, wy, lz, id);
         c.dirty = true;
+        c.modified = true;
         if (lx == 0) markDirty(cx - 1, cz);
         if (lx == Chunk.SX - 1) markDirty(cx + 1, cz);
         if (lz == 0) markDirty(cx, cz - 1);
@@ -85,7 +95,11 @@ public final class World {
                     if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue;
                     Chunk c = getOrCreateChunk(pcx + dx, pcz + dz);
                     if (!c.generated) {
-                        generator.generate(c);
+                        if (storage != null && storage.loadChunk(c)) {
+                            c.modified = true; // keep it on disk across sessions
+                        } else {
+                            generator.generate(c);
+                        }
                         c.generated = true;
                         c.dirty = true;
                         markDirty(c.cx - 1, c.cz);
@@ -112,7 +126,25 @@ public final class World {
                 it.remove();
             }
         }
-        for (Chunk c : doomed) c.deleteMeshes();
+        for (Chunk c : doomed) {
+            if (storage != null && c.modified) {
+                storage.saveChunk(c);
+            }
+            c.deleteMeshes();
+        }
+    }
+
+    /** Writes every player-modified chunk to disk (autosave / quit). */
+    public int saveModifiedChunks() {
+        if (storage == null) return 0;
+        int saved = 0;
+        for (Chunk c : chunks.values()) {
+            if (c.modified) {
+                storage.saveChunk(c);
+                saved++;
+            }
+        }
+        return saved;
     }
 
     /** Highest non-air block at (wx, wz), or SEA_LEVEL if the chunk is missing. */

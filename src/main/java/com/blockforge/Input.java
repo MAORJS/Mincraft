@@ -13,17 +13,25 @@ public final class Input {
     public double mouseDX, mouseDY;
     public double scrollY;
 
+    /** Characters typed this frame (for text fields). */
+    public final StringBuilder typed = new StringBuilder();
+
     private double lastX, lastY;
     private boolean firstMouse = true;
 
     public void install(long window) {
         glfwSetKeyCallback(window, (w, key, sc, action, mods) -> {
             if (key < 0 || key > GLFW_KEY_LAST) return;
-            if (action == GLFW_PRESS) {
+            if (action == GLFW_PRESS || action == GLFW_REPEAT) {
                 keys[key] = true;
                 keysPressed[key] = true;
             } else if (action == GLFW_RELEASE) {
                 keys[key] = false;
+            }
+        });
+        glfwSetCharCallback(window, (w, codepoint) -> {
+            if (codepoint >= 32 && codepoint < 127) {
+                typed.append((char) codepoint);
             }
         });
         glfwSetMouseButtonCallback(window, (w, button, action, mods) -> {
@@ -53,7 +61,7 @@ public final class Input {
         return keys[key];
     }
 
-    /** True once per key press. */
+    /** True once per key press (and once per OS key repeat). */
     public boolean pressed(int key) {
         return keysPressed[key];
     }
@@ -67,6 +75,14 @@ public final class Input {
         return mousePressed[button];
     }
 
+    public double mouseX() {
+        return lastX;
+    }
+
+    public double mouseY() {
+        return lastY;
+    }
+
     /** Called at the end of each frame to reset one-shot events. */
     public void endFrame() {
         java.util.Arrays.fill(keysPressed, false);
@@ -74,6 +90,7 @@ public final class Input {
         mouseDX = 0;
         mouseDY = 0;
         scrollY = 0;
+        typed.setLength(0);
     }
 
     /** Forget the last cursor position (after re-capturing the mouse). */

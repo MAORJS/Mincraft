@@ -21,6 +21,8 @@ public final class Chunk {
     public boolean dirty = true;
     /** Set once terrain generation has finished. */
     public boolean generated = false;
+    /** Player changed a block here — chunk must be written to disk. */
+    public boolean modified = false;
 
     public Mesh opaqueMesh;
     public Mesh translucentMesh;
@@ -46,6 +48,11 @@ public final class Chunk {
     public void set(int x, int y, int z, int id) {
         if (!inBounds(x, y, z)) return;
         blocks[index(x, y, z)] = (short) id;
+    }
+
+    /** Direct access to the block array (chunk serialization). */
+    public short[] raw() {
+        return blocks;
     }
 
     public void deleteMeshes() {

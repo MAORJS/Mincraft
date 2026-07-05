@@ -77,7 +77,9 @@ public final class Renderer {
             }
             """;
 
-    public final int viewRadiusChunks;
+    public int viewRadiusChunks;
+    public float fovDegrees = 72f;
+    public boolean fogEnabled = true;
 
     private final Shader worldShader;
     private final Shader lineShader;
@@ -88,11 +90,11 @@ public final class Renderer {
     private final Matrix4f proj = new Matrix4f();
     private final Matrix4f view = new Matrix4f();
 
-    public Renderer(int viewRadiusChunks) {
+    public Renderer(int viewRadiusChunks, int atlasTexture) {
         this.viewRadiusChunks = viewRadiusChunks;
+        this.atlasTexture = atlasTexture;
         worldShader = new Shader(WORLD_VS, WORLD_FS);
         lineShader = new Shader(LINE_VS, LINE_FS);
-        atlasTexture = TextureAtlas.createGLTexture();
 
         lineVao = glGenVertexArrays();
         lineVbo = glGenBuffers();
@@ -134,14 +136,14 @@ public final class Renderer {
         glClearColor(skyColor.x, skyColor.y, skyColor.z, 1f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        proj.identity().perspective((float) Math.toRadians(72f), aspect, 0.05f, 512f);
+        proj.identity().perspective((float) Math.toRadians(fovDegrees), aspect, 0.05f, 512f);
         view.identity()
                 .rotateX((float) Math.toRadians(player.pitch))
                 .rotateY((float) Math.toRadians(player.yaw))
                 .translate(-player.position.x, -(player.position.y + Player.EYE_HEIGHT), -player.position.z);
 
-        float fogEnd = viewRadiusChunks * Chunk.SX - 8;
-        float fogStart = fogEnd * 0.6f;
+        float fogEnd = fogEnabled ? viewRadiusChunks * Chunk.SX - 8 : 10000f;
+        float fogStart = fogEnabled ? fogEnd * 0.6f : 9000f;
 
         worldShader.use();
         worldShader.setMat4("uProj", proj);
@@ -214,9 +216,9 @@ public final class Renderer {
     }
 
     public void delete() {
+        // the atlas texture is owned by Main (shared with the GUI)
         worldShader.delete();
         lineShader.delete();
-        glDeleteTextures(atlasTexture);
         glDeleteBuffers(lineVbo);
         glDeleteVertexArrays(lineVao);
     }
