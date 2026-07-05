@@ -1,0 +1,49 @@
+name: Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build jar and Launch4j exe
+        run: mvn -B package
+
+      - name: Build self-contained app image (bundled Java runtime)
+        shell: pwsh
+        run: |
+          jpackage --type app-image `
+            --name BlockForge `
+            --app-version 1.0.0 `
+            --vendor BlockForge `
+            --input target `
+            --main-jar blockforge-1.0.0.jar `
+            --main-class com.blockforge.Main `
+            --java-options "-Xmx2g" `
+            --dest dist
+          Compress-Archive -Path dist/BlockForge -DestinationPath BlockForge-windows-standalone.zip
+
+      - name: Upload Launch4j exe (needs Java 17+ installed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockForge-exe
+          path: target/BlockForge.exe
+
+      - name: Upload standalone zip (no Java needed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockForge-windows-standalone
+          path: BlockForge-windows-standalone.zip

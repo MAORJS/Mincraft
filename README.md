@@ -43,6 +43,17 @@ mvn package
 java -jar target/blockforge-1.0.0.jar          # optional: append a world seed
 ```
 
+`mvn package` also produces **`target/BlockForge.exe`** — a Windows launcher
+(built with Launch4j) that double-click runs the game on any Windows machine
+with Java 17+ installed. If Java is missing, it points the user to a download
+page.
+
+For a **fully self-contained Windows build with a bundled Java runtime** (no
+Java installation needed), run the *Windows build* GitHub Actions workflow
+(`.github/workflows/windows-build.yml`, via the Actions tab or by pushing a
+`v*` tag) and grab the `BlockForge-windows-standalone` artifact — unzip it and
+run `BlockForge/BlockForge.exe`.
+
 On **macOS** the JVM must start GLFW on the first thread:
 
 ```bash
