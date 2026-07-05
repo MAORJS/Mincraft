@@ -377,6 +377,8 @@ public final class TerrainGenerator {
             int x = 3 + rng.nextInt(Chunk.SX - 6);
             int z = 3 + rng.nextInt(Chunk.SZ - 6);
             int h = height[x][z];
+            if (h < World.SEA_LEVEL) continue;                    // no underwater trees
+            if (chunk.get(x, h + 1, z) != Blocks.AIR.id) continue; // trunk space must be open air
             int ground = chunk.get(x, h, z);
             if (ground != Blocks.GRASS.id && ground != Blocks.SNOWY_GRASS.id && ground != Blocks.DIRT.id) continue;
             if (h + 9 >= Chunk.SY) continue;

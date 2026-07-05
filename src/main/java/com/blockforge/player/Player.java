@@ -203,7 +203,8 @@ public final class Player {
         } else if (water) {
             velocity.y -= GRAVITY * 0.3f * dt;
             velocity.y = Math.max(velocity.y, -3.5f);
-            if (jump) velocity.y = 4f;
+            if (jump) velocity.y = 4.5f;   // swim up
+            if (sneak) velocity.y = -3.5f; // swim down
         } else {
             velocity.y -= GRAVITY * dt;
             velocity.y = Math.max(velocity.y, -60f);
@@ -214,17 +215,27 @@ public final class Player {
         }
 
         move(velocity.x * dt, velocity.y * dt, velocity.z * dt);
+
+        // vault out of water: swimming forward against a ledge while holding
+        // jump launches the player onto it
+        if (water && jump && collidedHorizontally && (forward != 0 || strafe != 0)) {
+            velocity.y = JUMP_SPEED;
+        }
     }
+
+    /** True when the last move() clipped against a wall on the X or Z axis. */
+    private boolean collidedHorizontally;
 
     /** Axis-separated swept movement with collision response. */
     private void move(float dx, float dy, float dz) {
+        collidedHorizontally = false;
         // move in small substeps so fast falls can't tunnel through blocks
         int steps = 1 + (int) (Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz))) / 0.4f);
         float sx = dx / steps, sy = dy / steps, sz = dz / steps;
         for (int i = 0; i < steps; i++) {
-            stepAxis(sx, 0);
+            if (stepAxis(sx, 0)) collidedHorizontally = true;
             boolean hitY = stepAxis(sy, 1);
-            stepAxis(sz, 2);
+            if (stepAxis(sz, 2)) collidedHorizontally = true;
             if (hitY && sy < 0) {
                 onGround = true;
                 velocity.y = 0;
